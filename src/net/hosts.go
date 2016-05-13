@@ -7,6 +7,7 @@ package net
 import (
 	"sync"
 	"time"
+	"fmt"
 )
 
 const cacheMaxAge = 5 * time.Minute
@@ -76,6 +77,8 @@ func readHosts() {
 
 // lookupStaticHost looks up the addresses for the given host from /etc/hosts.
 func lookupStaticHost(host string) []string {
+	PrintWithTime(fmt.Sprintf("lookupStaticHost: %s", host))
+	defer PrintWithTime(fmt.Sprintf("lookupStaticHost exit: %s", host))
 	hosts.Lock()
 	defer hosts.Unlock()
 	readHosts()

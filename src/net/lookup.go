@@ -7,6 +7,7 @@ package net
 import (
 	"internal/singleflight"
 	"time"
+	"fmt"
 )
 
 // protocols contains minimal mappings between internet protocol
@@ -73,7 +74,10 @@ func lookupIPMerge(host string) (addrs []IPAddr, err error) {
 // lookupIPReturn turns the return values from singleflight.Do into
 // the return values from LookupIP.
 func lookupIPReturn(addrsi interface{}, err error, shared bool) ([]IPAddr, error) {
+	PrintWithTime("lookupIPReturn")
+	defer PrintWithTime("lookupIPReturn exit")
 	if err != nil {
+		PrintWithTime(fmt.Sprintf("lookupIPReturn error: %s", err))
 		return nil, err
 	}
 	addrs := addrsi.([]IPAddr)
@@ -87,7 +91,10 @@ func lookupIPReturn(addrsi interface{}, err error, shared bool) ([]IPAddr, error
 
 // lookupIPDeadline looks up a hostname with a deadline.
 func lookupIPDeadline(host string, deadline time.Time) (addrs []IPAddr, err error) {
+	PrintWithTime(fmt.Sprintf("lookupIPDeadline(%s)", host))
+	defer PrintWithTime(fmt.Sprintf("lookupIPDeadline(%s) exit: %v, %s", host, addrs, err))
 	if deadline.IsZero() {
+		PrintWithTime(fmt.Sprintf("deadline is zero: %s", host))
 		return lookupIPMerge(host)
 	}
 
@@ -113,7 +120,7 @@ func lookupIPDeadline(host string, deadline time.Time) (addrs []IPAddr, err erro
 		// rather than waiting for the current lookup to
 		// complete.  See issue 8602.
 		lookupGroup.Forget(host)
-
+		PrintWithTime(fmt.Sprintf("lookupIPDeadline dns lookup timed out: %s", host))
 		return nil, errTimeout
 
 	case r := <-ch:

@@ -12,6 +12,8 @@
 
 package net
 
+import "fmt"
+
 // IP address lengths (bytes).
 const (
 	IPv4len = 4
@@ -493,6 +495,8 @@ func (n *IPNet) String() string {
 
 // Parse IPv4 address (d.d.d.d).
 func parseIPv4(s string) IP {
+	PrintWithTime(fmt.Sprintf("parseIPv4(%s)", s))
+	defer PrintWithTime(fmt.Sprintf("parseIPv4(%s) exit", s))
 	var p [IPv4len]byte
 	i := 0
 	for j := 0; j < IPv4len; j++ {
@@ -527,6 +531,8 @@ func parseIPv4(s string) IP {
 // zone identifier which is described in RFC 4007 when zoneAllowed is
 // true.
 func parseIPv6(s string, zoneAllowed bool) (ip IP, zone string) {
+	PrintWithTime(fmt.Sprintf("parseIPv6(%s, %t)", s, zoneAllowed))
+	defer PrintWithTime(fmt.Sprintf("parseIPv6(%s, %t) exit", s, zoneAllowed))
 	ip = make(IP, IPv6len)
 	ellipsis := -1 // position of ellipsis in p
 	i := 0         // index in string s
@@ -636,6 +642,8 @@ func parseIPv6(s string, zoneAllowed bool) (ip IP, zone string) {
 // If s is not a valid textual representation of an IP address,
 // ParseIP returns nil.
 func ParseIP(s string) IP {
+	PrintWithTime(fmt.Sprintf("ParseIP(%s)", s))
+	defer PrintWithTime(fmt.Sprintf("ParseIP(%s) exit", s))
 	for i := 0; i < len(s); i++ {
 		switch s[i] {
 		case '.':

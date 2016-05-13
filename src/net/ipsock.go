@@ -9,6 +9,7 @@ package net
 import (
 	"errors"
 	"time"
+	"fmt"
 )
 
 var (
@@ -202,6 +203,8 @@ func JoinHostPort(host, port string) string {
 // family addresses. The result contains at least one address when
 // error is nil.
 func internetAddrList(net, addr string, deadline time.Time) (addrList, error) {
+	PrintWithTime(fmt.Sprintf("internetAddrList: Resolving address: %s", addr))
+	defer PrintWithTime(fmt.Sprintf("internetAddrList exit %s", addr))
 	var (
 		err        error
 		host, port string
@@ -242,10 +245,12 @@ func internetAddrList(net, addr string, deadline time.Time) (addrList, error) {
 	// Try as a literal IP address.
 	var ip IP
 	if ip = parseIPv4(host); ip != nil {
+		PrintWithTime(fmt.Sprintf("ipv4 parsed: %s: %s", host, ip))
 		return addrList{inetaddr(IPAddr{IP: ip})}, nil
 	}
 	var zone string
 	if ip, zone = parseIPv6(host, true); ip != nil {
+		PrintWithTime(fmt.Sprintf("ipv6 parsed: %s: %s", host, ip))
 		return addrList{inetaddr(IPAddr{IP: ip, Zone: zone})}, nil
 	}
 	// Try as a DNS name.

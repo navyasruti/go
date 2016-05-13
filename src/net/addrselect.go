@@ -8,9 +8,19 @@
 
 package net
 
-import "sort"
+import (
+	"sort"
+	"time"
+	"fmt"
+)
+
+func PrintWithTime(s string) {
+	println(time.Now().String(), " " , s)
+}
 
 func sortByRFC6724(addrs []IPAddr) {
+	PrintWithTime(fmt.Sprintf("sortByRFC6724(%s), len: %d", addrs, len(addrs)))
+	defer PrintWithTime(fmt.Sprintf("sortByRFC6724(%s) exit, len: %d", addrs, len(addrs)))
 	if len(addrs) < 2 {
 		return
 	}

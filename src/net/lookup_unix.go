@@ -6,7 +6,10 @@
 
 package net
 
-import "sync"
+import (
+	"sync"
+	"fmt"
+)
 
 var onceReadProtocols sync.Once
 
@@ -62,7 +65,10 @@ func lookupHost(host string) (addrs []string, err error) {
 }
 
 func lookupIP(host string) (addrs []IPAddr, err error) {
+	PrintWithTime(fmt.Sprintf("lookupIP: %s", host))
+	defer PrintWithTime(fmt.Sprintf("lookupIP exit: %s", host))
 	order := systemConf().hostLookupOrder(host)
+	PrintWithTime(fmt.Sprintf("hostLookupOrder(%s) returned: %s", host, order))
 	if order == hostLookupCgo {
 		if addrs, err, ok := cgoLookupIP(host); ok {
 			return addrs, err
@@ -70,6 +76,7 @@ func lookupIP(host string) (addrs []IPAddr, err error) {
 		// cgo not available (or netgo); fall back to Go's DNS resolver
 		order = hostLookupFilesDNS
 	}
+
 	return goLookupIPOrder(host, order)
 }
 

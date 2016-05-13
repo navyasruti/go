@@ -8,6 +8,8 @@
 
 package net
 
+import "fmt"
+
 var defaultNS = []string{"127.0.0.1", "::1"}
 
 type dnsConfig struct {
@@ -26,6 +28,8 @@ type dnsConfig struct {
 // TODO(rsc): Supposed to call uname() and chop the beginning
 // of the host name to get the default search domain.
 func dnsReadConfig(filename string) *dnsConfig {
+	PrintWithTime(fmt.Sprintf("dnsReadConfig(%s)", filename))
+	defer PrintWithTime(fmt.Sprintf("dnsReadConfig(%s) exit", filename))
 	conf := &dnsConfig{
 		ndots:    1,
 		timeout:  5,
@@ -33,6 +37,7 @@ func dnsReadConfig(filename string) *dnsConfig {
 	}
 	file, err := open(filename)
 	if err != nil {
+		PrintWithTime(fmt.Sprintf("%s dnsReadConfig(%s) error reading file %s", filename, err))
 		conf.servers = defaultNS
 		conf.err = err
 		return conf

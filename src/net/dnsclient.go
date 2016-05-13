@@ -7,6 +7,7 @@ package net
 import (
 	"math/rand"
 	"sort"
+	"fmt"
 )
 
 // reverseaddr returns the in-addr.arpa. or ip6.arpa. hostname of the IP
@@ -38,9 +39,12 @@ func reverseaddr(addr string) (arpa string, err error) {
 // Find answer for name in dns message.
 // On return, if err == nil, addrs != nil.
 func answer(name, server string, dns *dnsMsg, qtype uint16) (cname string, addrs []dnsRR, err error) {
+	PrintWithTime(fmt.Sprintf("answer(%s, %s, %v, %d)", name, server, dns, qtype))
+	defer PrintWithTime(fmt.Sprintf("answer(%s, %s, %v, %d) exit", name, server, dns, qtype))
 	addrs = make([]dnsRR, 0, len(dns.answer))
 
 	if dns.rcode == dnsRcodeNameError && dns.recursion_available {
+		PrintWithTime(fmt.Sprintf("returning from answer(%s, %s, %v, %d): %s", name, server, dns, qtype, errNoSuchHost.Error()))
 		return "", nil, &DNSError{Err: errNoSuchHost.Error(), Name: name, Server: server}
 	}
 	if dns.rcode != dnsRcodeSuccess {
@@ -48,6 +52,7 @@ func answer(name, server string, dns *dnsMsg, qtype uint16) (cname string, addrs
 		// for the query we sent.  If we didn't get
 		// a name error and we didn't get success,
 		// the server is behaving incorrectly.
+		PrintWithTime(fmt.Sprintf("returning from answer(%s, %s, %v, %d): %s", name, server, dns, qtype, "server misbehaving"))
 		return "", nil, &DNSError{Err: "server misbehaving", Name: name, Server: server}
 	}
 

@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"fmt"
 )
 
 // A dnsConn represents a DNS transport endpoint.
@@ -64,6 +65,8 @@ func (c *UDPConn) writeDNSQuery(msg *dnsMsg) error {
 }
 
 func (c *TCPConn) readDNSResponse() (*dnsMsg, error) {
+	PrintWithTime("readDNSResponse()")
+	defer PrintWithTime("readDNSResponse() exit")
 	b := make([]byte, 1280) // 1280 is a reasonable initial size for IP over Ethernet, see RFC 4035
 	if _, err := io.ReadFull(c, b[:2]); err != nil {
 		return nil, err
@@ -84,6 +87,8 @@ func (c *TCPConn) readDNSResponse() (*dnsMsg, error) {
 }
 
 func (c *TCPConn) writeDNSQuery(msg *dnsMsg) error {
+	PrintWithTime(fmt.Sprintf("writeDNSQuery(%v)", msg))
+	defer PrintWithTime(fmt.Sprintf("writeDNSQuery(%v) exit", msg))
 	b, ok := msg.Pack()
 	if !ok {
 		return errors.New("cannot marshal DNS message")
@@ -97,6 +102,8 @@ func (c *TCPConn) writeDNSQuery(msg *dnsMsg) error {
 }
 
 func (d *Dialer) dialDNS(network, server string) (dnsConn, error) {
+	PrintWithTime(fmt.Sprintf("dialDNS(%s, %s)", network, server))
+	defer PrintWithTime(fmt.Sprintf("dialDNS(%s, %s) exit ", network, server))
 	switch network {
 	case "tcp", "tcp4", "tcp6", "udp", "udp4", "udp6":
 	default:
@@ -109,6 +116,7 @@ func (d *Dialer) dialDNS(network, server string) (dnsConn, error) {
 	// addresses, which Dial will use without a DNS lookup.
 	c, err := d.Dial(network, server)
 	if err != nil {
+		PrintWithTime(fmt.Sprintf("error d.Dail(%s, %s): %s", network, server, err))
 		return nil, err
 	}
 	switch network {
@@ -122,6 +130,8 @@ func (d *Dialer) dialDNS(network, server string) (dnsConn, error) {
 
 // exchange sends a query on the connection and hopes for a response.
 func exchange(server, name string, qtype uint16, timeout time.Duration) (*dnsMsg, error) {
+	PrintWithTime(fmt.Sprintf("exchange(%s, %s, %d, %s)", server, name, qtype, timeout))
+	defer PrintWithTime(fmt.Sprintf("exchange(%s, %s, %d, %s) exit", server, name, qtype, timeout))
 	d := Dialer{Timeout: timeout}
 	out := dnsMsg{
 		dnsMsgHdr: dnsMsgHdr{
@@ -142,39 +152,50 @@ func exchange(server, name string, qtype uint16, timeout time.Duration) (*dnsMsg
 		}
 		out.id = uint16(rand.Int()) ^ uint16(time.Now().UnixNano())
 		if err := c.writeDNSQuery(&out); err != nil {
+			PrintWithTime(fmt.Sprintf("writeDNSQuery(%s) error: %s", &out, err))
 			return nil, err
 		}
 		in, err := c.readDNSResponse()
 		if err != nil {
+			PrintWithTime(fmt.Sprintf("readDNSResponse() error: %s", err))
 			return nil, err
 		}
 		if in.id != out.id {
+			PrintWithTime(fmt.Sprintf("dns message ID mismatch %s %s", in.id, out.id))
 			return nil, errors.New("DNS message ID mismatch")
 		}
 		if in.truncated { // see RFC 5966
 			continue
 		}
+		PrintWithTime(fmt.Sprintf("exchange(%s, %s, %d, %s) returning: dns message %v", server, name, qtype, timeout, in))
 		return in, nil
 	}
+
+	PrintWithTime(fmt.Sprintf("exchange(%s, %s, %d, %s) returning: no answer from DNS server", server, name, qtype, timeout))
 	return nil, errors.New("no answer from DNS server")
 }
 
 // Do a lookup for a single name, which must be rooted
 // (otherwise answer will not find the answers).
 func tryOneName(cfg *dnsConfig, name string, qtype uint16) (string, []dnsRR, error) {
+	PrintWithTime(fmt.Sprintf("tryOneName(%s, %d)", name, qtype))
 	if len(cfg.servers) == 0 {
+		PrintWithTime(fmt.Sprintf("tryOneName(%s, %d) exit: %s", name, qtype, "no DNS servers"))
 		return "", nil, &DNSError{Err: "no DNS servers", Name: name}
 	}
 	if len(name) >= 256 {
+		PrintWithTime(fmt.Sprintf("tryOneName(%s, %d) exit: %s", name, qtype, "DNS name too long"))
 		return "", nil, &DNSError{Err: "DNS name too long", Name: name}
 	}
 	timeout := time.Duration(cfg.timeout) * time.Second
 	var lastErr error
 	for i := 0; i < cfg.attempts; i++ {
+		PrintWithTime(fmt.Sprintf("tryOneName attempt: %d", i))
 		for _, server := range cfg.servers {
 			server = JoinHostPort(server, "53")
 			msg, err := exchange(server, name, qtype, timeout)
 			if err != nil {
+				PrintWithTime(fmt.Sprintf("error from exchange: %s", err))
 				lastErr = &DNSError{
 					Err:    err.Error(),
 					Name:   name,
@@ -187,17 +208,22 @@ func tryOneName(cfg *dnsConfig, name string, qtype uint16) (string, []dnsRR, err
 			}
 			cname, rrs, err := answer(name, server, msg, qtype)
 			if err == nil || msg.rcode == dnsRcodeSuccess || msg.rcode == dnsRcodeNameError && msg.recursion_available {
+				PrintWithTime(fmt.Sprintf("tryOneName(%s, %d) finished", name, qtype))
 				return cname, rrs, err
 			}
 			lastErr = err
 		}
 	}
+
+	PrintWithTime(fmt.Sprintf("tryOneName(%s, %d) finished all attempts to resolve: lastErr: %s", name, qtype, lastErr))
 	return "", nil, lastErr
 }
 
 // addrRecordList converts and returns a list of IP addresses from DNS
 // address records (both A and AAAA). Other record types are ignored.
 func addrRecordList(rrs []dnsRR) []IPAddr {
+	PrintWithTime("addrRecordList()")
+	defer PrintWithTime("addrRecordList() exit")
 	addrs := make([]IPAddr, 0, 4)
 	for _, rr := range rrs {
 		switch rr := rr.(type) {
@@ -251,28 +277,34 @@ func (conf *resolverConfig) init() {
 // The name variable only exists for testing. It is otherwise always
 // "/etc/resolv.conf".
 func (conf *resolverConfig) tryUpdate(name string) {
+	PrintWithTime(fmt.Sprintf("resolverConfig tryUpdate(%s)", name))
+	defer PrintWithTime(fmt.Sprintf("resolverConfig tryUpdate(%s) exit", name))
 	conf.initOnce.Do(conf.init)
 
 	// Ensure only one update at a time checks resolv.conf.
 	if !conf.tryAcquireSema() {
+		PrintWithTime(fmt.Sprintf("resolverConfig tryUpdate could not acquire semaphore (%s)", name))
 		return
 	}
 	defer conf.releaseSema()
 
 	now := time.Now()
 	if conf.lastChecked.After(now.Add(-5 * time.Second)) {
+		PrintWithTime(fmt.Sprintf("resolverConfig tryUpdate last checked was very recent (%s)", conf.lastChecked.String()))
 		return
 	}
 	conf.lastChecked = now
 
 	if fi, err := os.Stat(name); err == nil {
 		if fi.ModTime().Equal(conf.modTime) {
+			PrintWithTime(fmt.Sprintf("resolverConfig tryUpdate modified time is same. (%s) = (%s)", fi.ModTime().String(), conf.modTime.String()))
 			return
 		}
 		conf.modTime = fi.ModTime()
 	} else {
 		// If modTime wasn't set prior, assume nothing has changed.
 		if conf.modTime.IsZero() {
+			PrintWithTime(fmt.Sprintf("resolverConfig tryUpdate conf.ModTime was not set. (%s)", conf.modTime.String()))
 			return
 		}
 		conf.modTime = time.Time{}
@@ -322,6 +354,8 @@ func lookup(name string, qtype uint16) (cname string, rrs []dnsRR, err error) {
 
 // nameList returns a list of names for sequential DNS queries.
 func (conf *dnsConfig) nameList(name string) []string {
+	PrintWithTime(fmt.Sprintf("nameList %s", name))
+	defer PrintWithTime(fmt.Sprintf("nameList exit %s", name))
 	// If name is rooted (trailing dot), try only that name.
 	rooted := len(name) > 0 && name[len(name)-1] == '.'
 	if rooted {
@@ -388,6 +422,8 @@ func goLookupHost(name string) (addrs []string, err error) {
 }
 
 func goLookupHostOrder(name string, order hostLookupOrder) (addrs []string, err error) {
+	PrintWithTime(fmt.Sprintf("goLookupHostOrder(%s, %s)", name, order))
+	defer PrintWithTime(fmt.Sprintf("goLookupHostOrder(%s, %s) exit: %v, %s", name, order, addrs, err))
 	if order == hostLookupFilesDNS || order == hostLookupFiles {
 		// Use entries from /etc/hosts if they match.
 		addrs = lookupStaticHost(name)
@@ -408,6 +444,8 @@ func goLookupHostOrder(name string, order hostLookupOrder) (addrs []string, err 
 
 // lookup entries from /etc/hosts
 func goLookupIPFiles(name string) (addrs []IPAddr) {
+	PrintWithTime(fmt.Sprintf("goLookupIPFiles(%s)", name))
+	defer PrintWithTime(fmt.Sprintf("goLookupIPFiles(%s) exit: %s", name, addrs))
 	for _, haddr := range lookupStaticHost(name) {
 		haddr, zone := splitHostZone(haddr)
 		if ip := ParseIP(haddr); ip != nil {
@@ -415,6 +453,7 @@ func goLookupIPFiles(name string) (addrs []IPAddr) {
 			addrs = append(addrs, addr)
 		}
 	}
+
 	sortByRFC6724(addrs)
 	return
 }
@@ -426,6 +465,8 @@ func goLookupIP(name string) (addrs []IPAddr, err error) {
 }
 
 func goLookupIPOrder(name string, order hostLookupOrder) (addrs []IPAddr, err error) {
+	PrintWithTime(fmt.Sprintf("goLookupIPOrder(%s): %s", name, order))
+	defer PrintWithTime(fmt.Sprintf("goLookupIPOrder(%s) exit: %v, %s", name, addrs, err))
 	if order == hostLookupFilesDNS || order == hostLookupFiles {
 		addrs = goLookupIPFiles(name)
 		if len(addrs) > 0 || order == hostLookupFiles {
@@ -433,6 +474,7 @@ func goLookupIPOrder(name string, order hostLookupOrder) (addrs []IPAddr, err er
 		}
 	}
 	if !isDomainName(name) {
+		PrintWithTime(fmt.Sprintf("goLookupIPOrder(%s) returning: invalid domain name", name))
 		return nil, &DNSError{Err: "invalid domain name", Name: name}
 	}
 	resolvConf.tryUpdate("/etc/resolv.conf")
@@ -454,11 +496,15 @@ func goLookupIPOrder(name string, order hostLookupOrder) (addrs []IPAddr, err er
 			}(qtype)
 		}
 		for range qtypes {
+			PrintWithTime(fmt.Sprintf("goLookupIPOrder(%s): Waiting for tryOneName to return", name))
 			racer := <-lane
 			if racer.error != nil {
+				PrintWithTime(fmt.Sprintf("goLookupIPOrder(%s): Error from tryOneName: %s", name, racer.error))
 				lastErr = racer.error
 				continue
 			}
+
+			PrintWithTime(fmt.Sprintf("goLookupIPOrder(%s): success from tryOneName: %v", name, racer.rrs))
 			addrs = append(addrs, addrRecordList(racer.rrs)...)
 		}
 		if len(addrs) > 0 {
@@ -473,10 +519,13 @@ func goLookupIPOrder(name string, order hostLookupOrder) (addrs []IPAddr, err er
 	}
 	sortByRFC6724(addrs)
 	if len(addrs) == 0 {
+		PrintWithTime(fmt.Sprintf("goLookupIPOrder(%s): len(addrs) is 0", name))
 		if lastErr != nil {
+			PrintWithTime(fmt.Sprintf("goLookupIPOrder(%s): returning lastErr: %s", name, lastErr))
 			return nil, lastErr
 		}
 		if order == hostLookupDNSFiles {
+			PrintWithTime(fmt.Sprintf("goLookupIPOrder(%s): order == hostLookupDNSFiles", name))
 			addrs = goLookupIPFiles(name)
 		}
 	}

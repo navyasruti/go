@@ -4,6 +4,8 @@
 
 package net
 
+import "fmt"
+
 // TCPAddr represents the address of a TCP end point.
 type TCPAddr struct {
 	IP   IP
@@ -46,6 +48,8 @@ func (a *TCPAddr) opAddr() Addr {
 // in square brackets, as in "[::1]:80", "[ipv6-host]:http" or
 // "[ipv6-host%zone]:80".
 func ResolveTCPAddr(net, addr string) (*TCPAddr, error) {
+	PrintWithTime(fmt.Sprintf("ResolveTCPAddr(%s, %s)", net, addr))
+	defer PrintWithTime(fmt.Sprintf("ResolveTCPAddr(%s, %s) exit", net, addr))
 	switch net {
 	case "tcp", "tcp4", "tcp6":
 	case "": // a hint wildcard for Go 1.0 undocumented behavior
